@@ -8,12 +8,12 @@
 // Chassis constructor
 ez::Drive chassis(
     // These are your drive motors, the first motor is used for sensing!
-    {1, 2, 3},     // Left Chassis Ports (negative port will reverse it!)
-    {-4, -5, -6},  // Right Chassis Ports (negative port will reverse it!)
+    {3, 4},     // Left Chassis Ports (negative port will reverse it!) (UPDATE ONCE WIRED)
+    {-5, -6},  // Right Chassis Ports (negative port will reverse it!)
 
-    7,      // IMU Port
+    2,      // IMU Port
     4.125,  // Wheel Diameter (Remember, 4" wheels without screw holes are actually 4.125!)
-    343);   // Wheel RPM = cartridge * (motor gear / wheel gear)
+    343);   // Wheel RPM = cartridge * (motor gear / wheel gear) 
 
 // Uncomment the trackers you're using here!
 // - `8` and `9` are smart ports (making these negative will reverse the sensor)
@@ -72,6 +72,7 @@ void initialize() {
       {"Boomerang\n\nGo to (0, 24, 45) then come back to (0, 0, 0)", odom_boomerang_example},
       {"Boomerang Pure Pursuit\n\nGo to (0, 24, 45) on the way to (24, 24) then come back to (0, 0, 0)", odom_boomerang_injected_pure_pursuit_example},
       {"Measure Offsets\n\nThis will turn the robot a bunch of times and calculate your offsets for your tracking wheels.", measure_offsets},
+
   });
 
   // Initialize chassis and auton selector
@@ -132,6 +133,8 @@ void autonomous() {
   You can do cool curved motions, but you have to give your robot the best chance
   to be consistent
   */
+
+
 
   ez::as::auton_selector.selected_auton_call();  // Calls selected auton from autonomous selector
 }
@@ -243,15 +246,106 @@ void opcontrol() {
   // This is preference to what you like to drive on
   chassis.drive_brake_set(MOTOR_BRAKE_COAST);
 
+  // ports (double check if errors arise)
+  const int initialMotorPort = 10;
+  const int middleMotorPort = 7;
+  const int lastMotorPort = 8;
+  const char intakePistonPort = 'A'; 
+  const char outtakePistonPort = 'B';
+
+  // initial motor that takes in vex ball
+  pros::Motor InitialIntake(initialMotorPort, pros::MotorGearset::green);
+  // second motor moving in opposite direction connected to 
+  // multiple gears using a chain for continued motion
+  // through the S shape.
+  pros::Motor ContinuedIntake(middleMotorPort, pros::MotorGearset::green);
+
+  // Outtake from front side, turned on/off to prevent and launch ball out
+  // depending on whether the piston is up/down 
+  pros::Motor Outtake(lastMotorPort, pros::MotorGearset::green);
+
+  // Outtake piston, assuming we start low (to remain within bounds) then fire to actually be able to score
+  //Piston OuttakePiston(outtakePistonPort, false);
+  pros::ADIDigitalOut IntakePiston(intakePistonPort);
+  bool intakePistonDown = false;
+
+  pros::ADIDigitalOut OuttakePiston(outtakePistonPort);
+  bool outtakePistonDown = false;
+
+  // Configure drivetrain output
+  chassis.opcontrol_curve_buttons_toggle(false);
+  chassis.opcontrol_drive_activebrake_set(0.0);
+  chassis.opcontrol_curve_default_set(0.0, 0.0);
+
+  // different states
+  bool reverseOuttaking = false; // piston should be down 
+  bool outtakingHigh = false; 
+  bool outtakingLow = false;
+
   while (true) {
     // Gives you some extras to make EZ-Template ezier
     ez_template_extras();
 
-    chassis.opcontrol_tank();  // Tank control
-    // chassis.opcontrol_arcade_standard(ez::SPLIT);   // Standard split arcade
-    // chassis.opcontrol_arcade_standard(ez::SINGLE);  // Standard single arcade
+    // chassis.opcontrol_tank();  // Tank control
+    
+    //chassis.opcontrol_arcade_standard(ez::SPLIT);   // Standard split arcade
+    chassis.opcontrol_arcade_standard(ez::SINGLE);  // Standard single arcade
     // chassis.opcontrol_arcade_flipped(ez::SPLIT);    // Flipped split arcade
     // chassis.opcontrol_arcade_flipped(ez::SINGLE);   // Flipped single arcade
+    
+    bool outtakingHighButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2);
+    bool outtakingLowButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1);
+    bool reverseOuttakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1); 
+    bool pistonIntakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L2); 
+    bool pistonOuttakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A);
+
+    //  bool pistonUp = OuttakePiston.get();
+
+    // only new button presses will change the current state
+    
+    // to set piston
+    if (outtakingHighButton){
+      outtakingHigh = !outtakingHigh;
+      outtakingLow = false;
+      reverseOuttaking = false;
+    } else if (outtakingLowButton){
+      outtakingLow = !outtakingLow;
+      outtakingHigh = false;
+      reverseOuttaking = false;
+    } else if (reverseOuttakeButton){
+      reverseOuttaking = !reverseOuttaking;
+      outtakingHigh = false;
+      outtakingLow = false;
+    }
+
+    if (!reverseOuttaking){ // in both cases of normal intaking and outtaking we want the balls to move through S shape
+      InitialIntake.move(-120);
+      ContinuedIntake.move(-120); // needs to be in reverse to continue motion
+      //screen_print("front outtaking or intaking?", 1);
+    } else { // reverse outtaking is turning the intake motors on in the opposite direction
+      InitialIntake.move(120);
+      ContinuedIntake.move(120);
+      //screen_print("reverse outtaking?", 2);
+    }
+
+    if (outtakingHigh){ // should make ball move forward and high
+      Outtake.move(120);
+    } else if (outtakingLow || reverseOuttaking){ // should make ball move down and low
+      Outtake.move(-120);
+    } else {
+      Outtake.move(0);
+    }
+
+   if (pistonIntakeButton){ // if down -> up, if up -> down
+      intakePistonDown = !intakePistonDown;
+      IntakePiston.set_value(intakePistonDown);
+    } 
+
+    if (pistonOuttakeButton){
+      outtakePistonDown = !outtakePistonDown;
+      OuttakePiston.set_value(outtakePistonDown);
+    }
+
 
     // . . .
     // Put more user control code here!
@@ -260,3 +354,5 @@ void opcontrol() {
     pros::delay(ez::util::DELAY_TIME);  // This is used for timer calculations!  Keep this ez::util::DELAY_TIME
   }
 }
+
+
