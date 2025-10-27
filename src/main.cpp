@@ -281,6 +281,7 @@ void opcontrol() {
   bool reverseOuttaking = false; // piston should be down 
   bool outtakingHigh = false; 
   bool outtakingLow = false;
+  bool notIntaking = false;
 
   while (true) {
     // Gives you some extras to make EZ-Template ezier
@@ -298,11 +299,15 @@ void opcontrol() {
     bool reverseOuttakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1); 
     bool pistonIntakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L2); 
     bool pistonOuttakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A);
-
+    bool stopIntakingButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B);
     //  bool pistonUp = OuttakePiston.get();
 
     // only new button presses will change the current state
     
+    if (stopIntakingButton){
+      notIntaking = !notIntaking;
+    }
+
     // to set piston
     if (outtakingHighButton){
       outtakingHigh = !outtakingHigh;
@@ -318,14 +323,22 @@ void opcontrol() {
       outtakingLow = false;
     }
 
-    if (!reverseOuttaking){ // in both cases of normal intaking and outtaking we want the balls to move through S shape
+    if (!reverseOuttaking && !notIntaking){ // in both cases of normal intaking and outtaking we want the balls to move through S shape
       InitialIntake.move(-120);
       ContinuedIntake.move(-120); // needs to be in reverse to continue motion
       //screen_print("front outtaking or intaking?", 1);
-    } else { // reverse outtaking is turning the intake motors on in the opposite direction
+    } else if (!notIntaking){ // reverse outtaking is turning the intake motors on in the opposite direction
       InitialIntake.move(120);
       ContinuedIntake.move(120);
       //screen_print("reverse outtaking?", 2);
+    } else {
+      
+      if (!reverseOuttaking){
+        InitialIntake.move(-120);
+      } else {
+        InitialIntake.move(120);
+      }
+      ContinuedIntake.move(0);
     }
 
     if (outtakingHigh){ // should make ball move forward and high
