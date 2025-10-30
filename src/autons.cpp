@@ -58,20 +58,43 @@ void redLeftCorner(){
   // Path
 
 
-//forward(27.701, 30);
+// Path
+
+  //forward(20.029, 30);
+  //turnTo(320.347, 30);
+  //forward(32.915, 30);
+  //turnTo(270, 30);
+  //backward(22.831, 30);
+  //turnTo(357.127, 30);
+  //backward(63.777, 30);
+  //turnTo(37.694, 30);
+  //backward(38.085, 30);
+  //turnTo(271.828, 30);
+  //backward(21.472, 30);
+  //turnTo(93.252, 30);
+  //backward(40.247, 30);
+  //turnTo(0, 30);
+
+  default_constants(); // mess around with these
+
+// Path
+
+//forward(20.029, 30);
 //turnTo(320.347, 30);
 //forward(32.915, 30);
-//turnTo(270, 30);
-//backward(22.831, 30);
-//turnTo(357.127, 30);
-//backward(63.777, 30);
-//turnTo(37.694, 30);
+//turnTo(90, 30);
+//forward(22.831, 30);
+//turnTo(177.127, 30);
+//forward(63.777, 30);
+//turnTo(217.694, 30);
 //backward(38.085, 30);
-//turnTo(271.828, 30);
+//turnTo(91.828, 30);
 //backward(21.472, 30);
-//turnTo(93.252, 30);
-//backward(40.247, 30);
+//turnTo(273.252, 30);
+//forward(40.247, 30);
 //turnTo(0, 30);
-
-
+  intake();
+  chassis.odom_xyt_set(-50.492_in, 12.822_in, 47.663_deg);
+  chassis.pid_odom_set({{-30.167_in, 31.34_in, 317.406_deg}, fwd, DRIVE_SPEED});
+  chassis.pid_odom_set({{-19.02_in, 19.215_in, 315.406_deg}, fwd, DRIVE_SPEED});
 }
