@@ -1,4 +1,5 @@
 #include "main.h"
+#include <scoring.hpp>
 
 /////
 // For installation, upgrading, documentations, and tutorials, check out our website!
@@ -11,7 +12,7 @@ ez::Drive chassis(
     {3, 4},     // Left Chassis Ports (negative port will reverse it!) (UPDATE ONCE WIRED)
     {-5, -6},  // Right Chassis Ports (negative port will reverse it!)
 
-    2,      // IMU Port
+    11,      // IMU Port
     4.125,  // Wheel Diameter (Remember, 4" wheels without screw holes are actually 4.125!)
     343);   // Wheel RPM = cartridge * (motor gear / wheel gear) 
 
@@ -59,18 +60,6 @@ void initialize() {
   // Autonomous Selector using LLEMU
   ez::as::auton_selector.autons_add({
       {"Drive\n\nDrive forward and come back", drive_example},
-      {"Turn\n\nTurn 3 times.", turn_example},
-      {"Drive and Turn\n\nDrive forward, turn, come back", drive_and_turn},
-      {"Drive and Turn\n\nSlow down during drive", wait_until_change_speed},
-      {"Swing Turn\n\nSwing in an 'S' curve", swing_example},
-      {"Motion Chaining\n\nDrive forward, turn, and come back, but blend everything together :D", motion_chaining},
-      {"Combine all 3 movements", combining_movements},
-      {"Interference\n\nAfter driving forward, robot performs differently if interfered or not", interfered_example},
-      {"Simple Odom\n\nThis is the same as the drive example, but it uses odom instead!", odom_drive_example},
-      {"Pure Pursuit\n\nGo to (0, 30) and pass through (6, 10) on the way.  Come back to (0, 0)", odom_pure_pursuit_example},
-      {"Pure Pursuit Wait Until\n\nGo to (24, 24) but start running an intake once the robot passes (12, 24)", odom_pure_pursuit_wait_until_example},
-      {"Boomerang\n\nGo to (0, 24, 45) then come back to (0, 0, 0)", odom_boomerang_example},
-      {"Boomerang Pure Pursuit\n\nGo to (0, 24, 45) on the way to (24, 24) then come back to (0, 0, 0)", odom_boomerang_injected_pure_pursuit_example},
       {"Measure Offsets\n\nThis will turn the robot a bunch of times and calculate your offsets for your tracking wheels.", measure_offsets},
 
   });
@@ -246,31 +235,7 @@ void opcontrol() {
   // This is preference to what you like to drive on
   chassis.drive_brake_set(MOTOR_BRAKE_COAST);
 
-  // ports (double check if errors arise)
-  const int initialMotorPort = 10;
-  const int middleMotorPort = 7;
-  const int lastMotorPort = 8;
-  const char intakePistonPort = 'A'; 
-  const char outtakePistonPort = 'B';
-
-  // initial motor that takes in vex ball
-  pros::Motor InitialIntake(initialMotorPort, pros::MotorGearset::green);
-  // second motor moving in opposite direction connected to 
-  // multiple gears using a chain for continued motion
-  // through the S shape.
-  pros::Motor ContinuedIntake(middleMotorPort, pros::MotorGearset::green);
-
-  // Outtake from front side, turned on/off to prevent and launch ball out
-  // depending on whether the piston is up/down 
-  pros::Motor Outtake(lastMotorPort, pros::MotorGearset::green);
-
-  // Outtake piston, assuming we start low (to remain within bounds) then fire to actually be able to score
-  //Piston OuttakePiston(outtakePistonPort, false);
-  pros::ADIDigitalOut IntakePiston(intakePistonPort);
   bool intakePistonDown = false;
-
-  pros::ADIDigitalOut OuttakePiston(outtakePistonPort);
-  bool outtakePistonDown = false;
 
   // Configure drivetrain output
   chassis.opcontrol_curve_buttons_toggle(false);
@@ -283,14 +248,16 @@ void opcontrol() {
   bool outtakingLow = false;
   bool notIntaking = false;
 
+  Outtake.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  
   while (true) {
     // Gives you some extras to make EZ-Template ezier
     ez_template_extras();
 
     // chassis.opcontrol_tank();  // Tank control
     
-    //chassis.opcontrol_arcade_standard(ez::SPLIT);   // Standard split arcade
-    chassis.opcontrol_arcade_standard(ez::SINGLE);  // Standard single arcade
+    chassis.opcontrol_arcade_standard(ez::SPLIT);   // Standard split arcade
+    // chassis.opcontrol_arcade_standard(ez::SINGLE);  // Standard single arcade
     // chassis.opcontrol_arcade_flipped(ez::SPLIT);    // Flipped split arcade
     // chassis.opcontrol_arcade_flipped(ez::SINGLE);   // Flipped single arcade
     
@@ -298,7 +265,6 @@ void opcontrol() {
     bool outtakingLowButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1);
     bool reverseOuttakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1); 
     bool pistonIntakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L2); 
-    bool pistonOuttakeButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A);
     bool stopIntakingButton = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B);
     //  bool pistonUp = OuttakePiston.get();
 
@@ -323,42 +289,24 @@ void opcontrol() {
       outtakingLow = false;
     }
 
-    if (!reverseOuttaking && !notIntaking){ // in both cases of normal intaking and outtaking we want the balls to move through S shape
-      InitialIntake.move(-120);
-      ContinuedIntake.move(-120); // needs to be in reverse to continue motion
-      //screen_print("front outtaking or intaking?", 1);
-    } else if (!notIntaking){ // reverse outtaking is turning the intake motors on in the opposite direction
-      InitialIntake.move(120);
-      ContinuedIntake.move(120);
-      //screen_print("reverse outtaking?", 2);
+    if (notIntaking){
+      stopIntaking();
     } else {
-      
-      if (!reverseOuttaking){
-        InitialIntake.move(-120);
-      } else {
-        InitialIntake.move(120);
-      }
-      ContinuedIntake.move(0);
+      intake();
     }
-
-    if (outtakingHigh){ // should make ball move forward and high
-      Outtake.move(120);
-    } else if (outtakingLow || reverseOuttaking){ // should make ball move down and low
-      Outtake.move(-120);
-    } else {
-      Outtake.move(0);
-    }
+    
+    if (outtakingHigh){
+      scoreHigh();
+    } else if (outtakingLow){
+      scoreMedium();
+    } else if (reverseOuttaking){
+      scoreLow();
+    } 
 
    if (pistonIntakeButton){ // if down -> up, if up -> down
       intakePistonDown = !intakePistonDown;
       IntakePiston.set_value(intakePistonDown);
-    } 
-
-    if (pistonOuttakeButton){
-      outtakePistonDown = !outtakePistonDown;
-      OuttakePiston.set_value(outtakePistonDown);
-    }
-
+   };
 
     // . . .
     // Put more user control code here!
